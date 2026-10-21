@@ -1,0 +1,1 @@
+CREATE DATABASE coupon_rush_test;

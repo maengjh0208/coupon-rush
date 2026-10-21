@@ -8,7 +8,9 @@ authors = [
 ]
 requires-python = ">=3.14"
 dependencies = [
+    "asyncpg>=0.32.0",
     "fastapi>=0.143.1",
+    "sqlalchemy[asyncio]>=2.1.5",
 ]
 
 [build-system]
