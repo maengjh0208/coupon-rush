@@ -6,8 +6,9 @@ FastAPI 기반 선착순 쿠폰 발급 시스템. 동시성 제어 방식을 단
 
 ## 스택
 
-- Python, FastAPI (async)
-- PostgreSQL, SQLAlchemy 2.0 async (Core 위주, ORM은 테이블 정의 수준) + asyncpg
+- FastAPI (async), uvicorn
+- Python 3.14, uv
+- PostgreSQL 18, SQLAlchemy 2.1 async Core (테이블도 Core `Table`로 정의) + asyncpg
 - Redis (3단계부터)
 - Docker Compose: 컨테이너별 `cpus`, `mem_limit`로 자원 고정
 - k6: 호스트에서 실행
@@ -43,7 +44,26 @@ API는 하나로 두고, 서버 기동 시 환경변수(`ISSUE_STRATEGY`)로 발
 
 ## 프로젝트 구조 · 빌드 · 실행
 
-아직 없음. 첫 코드가 생기면 채운다.
+```
+src/coupon_rush/main.py     FastAPI 앱, lifespan(엔진), get_conn, 엔드포인트
+src/coupon_rush/tables.py   SQLAlchemy Core 테이블 정의 (metadata)
+tests/conftest.py           테스트 엔진(drop/create_all), client(TRUNCATE + get_conn override), coupon_id seed
+scripts/reset_db.py         개발 DB 초기화 + 쿠폰 1개 시드
+experiments/                개념 확인용 일회성 실험 스크립트
+docker/postgres/init/       최초 볼륨 생성 시 실행되는 SQL (테스트 DB 생성)
+```
+
+모든 명령은 컨테이너 안에서 실행한다. venv는 이미지의 `/opt/venv`에 있다.
+
+```bash
+docker compose up -d --build                         # 의존성(pyproject/uv.lock) 변경 시 --build 필수
+docker compose exec app python scripts/reset_db.py   # 개발 DB 초기화·시드 (데이터 전부 삭제)
+docker compose run --rm app pytest                   # 테스트 (coupon_rush_test DB 사용)
+curl -i -X POST localhost:8000/coupons/1/issue -H 'Content-Type: application/json' -d '{"user_id": 7}'
+```
+
+- 앱은 `uvicorn --reload`로 뜬다. 부하 측정 시에는 `--reload`를 뺀다.
+- `docker/postgres/init/`은 빈 볼륨에서만 실행된다. 바꿨으면 `docker compose down -v`.
 
 ## 문서
 
