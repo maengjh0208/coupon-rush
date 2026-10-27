@@ -3,11 +3,12 @@ from contextlib import asynccontextmanager
 from typing import AsyncIterator, Annotated
 
 from fastapi import FastAPI, Request, Depends
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from sqlalchemy import insert
+from sqlalchemy import insert, select, update, exists
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncConnection
 
-from coupon_rush.tables import coupon_issue
+from coupon_rush.tables import coupon_issue, coupon
 
 
 @asynccontextmanager
@@ -37,7 +38,29 @@ async def issue_coupon(
         coupon_id: int,
         body: IssueRequest,
         conn: Annotated[AsyncConnection, Depends(get_conn)],
-):
+):  # 의도적으로 락 없음. 문제 2 경쟁 상태 재현
+    already_issued = (
+        await conn.execute(
+            select(exists().where(coupon_issue.c.coupon_id == coupon_id, coupon_issue.c.user_id == body.user_id))
+        )
+    ).scalar_one()
+
+    if already_issued:
+        return JSONResponse(status_code=409, content={"code": "ALREADY_ISSUED"})
+
+    issued_quantity, total_quantity = (
+        await conn.execute(
+            select(coupon.c.issued_quantity, coupon.c.total_quantity).where(coupon.c.id == coupon_id)
+        )
+    ).one()
+
+    if issued_quantity >= total_quantity:
+        return JSONResponse(status_code=409, content={"code": "SOLD_OUT"})
+
+    await conn.execute(
+        update(coupon).where(coupon.c.id == coupon_id).values(issued_quantity=issued_quantity + 1)
+    )
+
     await conn.execute(
         insert(coupon_issue).values(coupon_id=coupon_id, user_id=body.user_id)
     )

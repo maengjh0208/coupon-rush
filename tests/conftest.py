@@ -48,13 +48,20 @@ async def client(test_engine):
 
 # client의 TRUNCATE 이후에 INSERT 되도록 client에 의존
 @pytest.fixture
-async def coupon_id(client, test_engine):
-    async with test_engine.begin() as conn:
-        result = await conn.execute(
-            insert(coupon)
-            .values(name="선착순 쿠폰", total_quantity=100, starts_at=datetime.now(UTC))
-            .returning(coupon.c.id)
-        )
+async def create_coupon(client, test_engine):
+    # fixture는 인자를 받을 수 없음. 그래서 인자를 받는 함수를 돌려주고, 테스트 안에서 원하는 값으로 호출할 수 있게 하는 factory as fixture 패턴 사용
+    async def _create(total_quantity: int = 100):
+        async with test_engine.begin() as conn:
+            result = await conn.execute(
+                insert(coupon)
+                .values(name="선착순 쿠폰", total_quantity=total_quantity, starts_at=datetime.now(UTC))
+                .returning(coupon.c.id)
+            )
+        return result.scalar_one()
 
-    return result.scalar_one()
+    return _create
 
+
+@pytest.fixture
+async def coupon_id(create_coupon):
+    return await create_coupon()
