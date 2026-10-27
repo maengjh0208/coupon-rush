@@ -1,6 +1,7 @@
 services:
   app:
     build: .
+    command: uvicorn coupon_rush.main:app --host 0.0.0.0 --port 8000 --reload
     volumes:
       - .:/app
     ports:
