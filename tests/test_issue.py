@@ -34,7 +34,6 @@ async def test_returns_sold_out_when_quantity_exhausted(client, create_coupon):
     assert response.json() == {"code": "SOLD_OUT"}
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason="락 없음: 동시 요청 시 초과 발급 (문제 4에서 해결 예정)")
 async def test_concurrent_requests_do_not_exceed_quantity(client, test_engine, create_coupon):
     total_quantity = 10
     coupon_id = await create_coupon(total_quantity=total_quantity)
@@ -51,7 +50,6 @@ async def test_concurrent_requests_do_not_exceed_quantity(client, test_engine, c
     assert issued_rows == total_quantity
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason="락 없음: 읽은 값으로 덮어써서 갱신 손실 (문제 4에서 해결 예정)")
 async def test_concurrent_requests_keep_issued_quantity_in_sync(client, test_engine, create_coupon):
     coupon_id = await create_coupon(total_quantity=1000)
 

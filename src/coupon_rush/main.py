@@ -38,7 +38,7 @@ async def issue_coupon(
         coupon_id: int,
         body: IssueRequest,
         conn: Annotated[AsyncConnection, Depends(get_conn)],
-):  # 의도적으로 락 없음. 문제 2 경쟁 상태 재현
+):
     already_issued = (
         await conn.execute(
             select(exists().where(coupon_issue.c.coupon_id == coupon_id, coupon_issue.c.user_id == body.user_id))
@@ -50,7 +50,7 @@ async def issue_coupon(
 
     issued_quantity, total_quantity = (
         await conn.execute(
-            select(coupon.c.issued_quantity, coupon.c.total_quantity).where(coupon.c.id == coupon_id)
+            select(coupon.c.issued_quantity, coupon.c.total_quantity).where(coupon.c.id == coupon_id).with_for_update()
         )
     ).one()
 
