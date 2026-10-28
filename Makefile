@@ -1,5 +1,7 @@
-reset_db:
-    docker compose exec app python scripts/reset_db.py
+.PHONY: reset-db pytest
+
+reset-db:
+	docker compose exec app python scripts/reset_db.py $(QTY)
 
 pytest:
-    docker compose exec app pytest -v
+	docker compose exec app pytest -v
