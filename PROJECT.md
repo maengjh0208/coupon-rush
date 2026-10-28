@@ -62,7 +62,17 @@ docker compose run --rm app pytest                   # 테스트 (coupon_rush_te
 curl -i -X POST localhost:8000/coupons/1/issue -H 'Content-Type: application/json' -d '{"user_id": 7}'
 ```
 
-- 앱은 `uvicorn --reload`로 뜬다. 부하 측정 시에는 `--reload`를 뺀다.
+- 앱은 `uvicorn --reload`로 뜬다. 부하 측정은 `docker-compose.bench.yaml`(reload 없음, CPU·메모리 고정)로 한다.
+
+### 부하 측정
+
+```bash
+git status                                   # 측정 전 커밋 (결과 폴더 이름에 커밋 해시가 들어감)
+./scripts/bench.sh                           # RATE 100/300/500/700/1000 × 3회, 결과는 bench-results/
+RATES="500" RUNS=1 ./scripts/bench.sh        # 일부만 빠르게
+```
+
+측정 조건과 기준선은 `docs/specs_plans/03-load-test-environment.md`.
 - `docker/postgres/init/`은 빈 볼륨에서만 실행된다. 바꿨으면 `docker compose down -v`.
 
 ## 문서
