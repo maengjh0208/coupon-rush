@@ -39,6 +39,7 @@ async def issue_coupon(
         body: IssueRequest,
         conn: Annotated[AsyncConnection, Depends(get_conn)],
 ):
+    # 중복 확인은 락 밖: 동시 요청 시 중복 발급 가능 (문제 5에서 해결 예정)
     already_issued = (
         await conn.execute(
             select(exists().where(coupon_issue.c.coupon_id == coupon_id, coupon_issue.c.user_id == body.user_id))
