@@ -1,0 +1,29 @@
+services:
+  app:
+    command: uvicorn coupon_rush.main:app --host 0.0.0.0 --port 8000 --timeout-keep-alive 30
+    cpus: 1
+    mem_limit: 512m
+
+  postgres:
+    cpus: 2
+    mem_limit: 1g
+
+    image: postgres:18
+    environment:
+      POSTGRES_USER: coupon_rush
+      POSTGRES_PASSWORD: coupon_rush
+      POSTGRES_DB: coupon_rush
+    ports:
+      - "5432:5432"
+    volumes:
+      - coupon_pgdata:/var/lib/postgresql
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U coupon_rush -d coupon_rush" ]
+      interval: 2s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  coupon_pgdata:
+
