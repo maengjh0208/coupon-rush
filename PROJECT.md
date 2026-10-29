@@ -36,7 +36,11 @@ coupon(id, name, total_quantity, issued_quantity, starts_at)
 coupon_issue(id, coupon_id, user_id, issued_at)
 ```
 
-1단계에서는 `coupon_issue(coupon_id, user_id)` UNIQUE 제약을 일부러 두지 않는다 (중복 발급 재현용).
+`coupon_issue(coupon_id, user_id)` UNIQUE 제약으로 중복 발급을 막는다 (문제 5).
+
+## 발급 거절과 트랜잭션
+
+거절(409)은 `IssueRejected(code)`를 raise하고 exception handler가 응답으로 바꾼다. 요청 트랜잭션(`get_conn`의 `engine.begin()`)은 정상 return이면 COMMIT, 예외면 ROLLBACK이므로, 쓰기 이후의 거절도 반드시 예외로 빠져나간다.
 
 ## 동시성 방식 전환
 

@@ -19,7 +19,7 @@
 | # | 문제 | 상태 |
 |---|---|---|
 | 4 | 동시 요청에서 재고보다 많이 발급된다 | 완료 ([04](specs_plans/04-over-issue-for-update.md)) |
-| 5 | 같은 사용자가 쿠폰을 두 장 이상 받는다 | 대기 |
+| 5 | 같은 사용자가 쿠폰을 두 장 이상 받는다 | 완료 ([05](specs_plans/05-duplicate-issue-unique.md)) |
 | 6 | DB 수준 해결책들의 처리량·지연 비용을 모른다 (FOR UPDATE의 락 비용과 app CPU 증폭이 분리되지 않음, [04](specs_plans/04-over-issue-for-update.md) 참고) | 대기 |
 
 ## 3단계: DB가 병목이라면
