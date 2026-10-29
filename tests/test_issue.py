@@ -75,8 +75,8 @@ async def test_returns_already_issued_when_user_requests_twice(client, coupon_id
     assert response.json() == {"code": "ALREADY_ISSUED"}
 
 
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason="락 없음: 동시 요청 시 같은 사용자 중복 발급 (문제 5에서 해결 예정)")
 async def test_concurrent_requests_from_same_user_issue_only_once(client, test_engine, coupon_id):
+    # 같은 user 동시에 10번 요청
     await asyncio.gather(*(
         client.post(f"/coupons/{coupon_id}/issue", json={"user_id": 1}) for _ in range(10)
     ))
@@ -88,3 +88,17 @@ async def test_concurrent_requests_from_same_user_issue_only_once(client, test_e
         ).scalar_one()
 
     assert issued_rows == 1
+
+
+async def test_concurrent_requests_from_same_user_keep_issued_quantity_in_sync(client, test_engine, coupon_id):
+    # 같은 user 동시에 10번 요청
+    await asyncio.gather(*(
+        client.post(f"/coupons/{coupon_id}/issue", json={"user_id": 1}) for _ in range(10)
+    ))
+
+    async with test_engine.connect() as conn:
+        issued_quantity = (
+            await conn.execute(select(coupon.c.issued_quantity).where(coupon.c.id == coupon_id))
+        ).scalar_one()
+
+    assert issued_quantity == 1

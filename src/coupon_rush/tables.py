@@ -9,6 +9,7 @@ from sqlalchemy import (
     Table,
     Text,
     func,
+    UniqueConstraint,
 )
 
 metadata = MetaData()  # 테이블 정의
@@ -30,4 +31,5 @@ coupon_issue = Table(
     Column("coupon_id", BigInteger, ForeignKey("coupon.id"), nullable=False),
     Column("user_id", BigInteger, nullable=False),
     Column("issued_at", DateTime(timezone=True), nullable=False, server_default=func.now()),  # server_default=func.now() 은 DB 서버의 now()로 찍힘
+    UniqueConstraint("coupon_id", "user_id", name="unique_coupon_issue_coupon_id_user_id"),
 )
