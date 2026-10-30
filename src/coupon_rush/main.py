@@ -27,9 +27,18 @@ class IssueRejected(Exception):
         self.code = code
 
 
+class CouponNotFound(Exception):
+    pass
+
+
 @app.exception_handler(IssueRejected)
 async def issue_rejected_handler(request: Request, exc: IssueRejected) -> JSONResponse:
     return JSONResponse(status_code=409, content={"code": exc.code})
+
+
+@app.exception_handler(CouponNotFound)
+async def coupon_not_found_handler(request: Request, exc: CouponNotFound) -> JSONResponse:
+    return JSONResponse(status_code=404, content={"code": "COUPON_NOT_FOUND"})
 
 
 async def get_conn(request: Request) -> AsyncIterator[AsyncConnection]:
@@ -60,11 +69,16 @@ async def issue_coupon(
     if already_issued:
         raise IssueRejected("ALREADY_ISSUED")
 
-    issued_quantity, total_quantity = (
+    row = (
         await conn.execute(
             select(coupon.c.issued_quantity, coupon.c.total_quantity).where(coupon.c.id == coupon_id).with_for_update()
         )
-    ).one()
+    ).one_or_none()
+
+    if row is None:
+        raise CouponNotFound()
+
+    issued_quantity, total_quantity = row
 
     if issued_quantity >= total_quantity:
         raise IssueRejected("SOLD_OUT")

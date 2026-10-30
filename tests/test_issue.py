@@ -102,3 +102,10 @@ async def test_concurrent_requests_from_same_user_keep_issued_quantity_in_sync(c
         ).scalar_one()
 
     assert issued_quantity == 1
+
+
+async def test_returns_not_found_when_coupon_does_not_exist(client):
+    response = await client.post("/coupons/999/issue", json={"user_id": 1})
+
+    assert response.status_code == 404
+    assert response.json() == {"code": "COUPON_NOT_FOUND"}
