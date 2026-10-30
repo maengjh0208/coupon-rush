@@ -40,7 +40,7 @@ coupon_issue(id, coupon_id, user_id, issued_at)
 
 ## 발급 거절과 트랜잭션
 
-거절(409)은 `IssueRejected(code)`를 raise하고 exception handler가 응답으로 바꾼다. 요청 트랜잭션(`get_conn`의 `engine.begin()`)은 정상 return이면 COMMIT, 예외면 ROLLBACK이므로, 쓰기 이후의 거절도 반드시 예외로 빠져나간다.
+거절(409)은 `IssueRejected(code)`, 없는 쿠폰(404)은 `CouponNotFound`를 raise하고 exception handler가 `{"code": ...}` 응답으로 바꾼다. 발급 로직은 HTTP를 모른다. 요청 트랜잭션(`get_conn`의 `engine.begin()`)은 정상 return이면 COMMIT, 예외면 ROLLBACK이므로, 쓰기 이후의 거절도 반드시 예외로 빠져나간다.
 
 ## 동시성 방식 전환
 
@@ -62,7 +62,8 @@ docker/postgres/init/       최초 볼륨 생성 시 실행되는 SQL (테스트
 ```bash
 docker compose up -d --build                         # 의존성(pyproject/uv.lock) 변경 시 --build 필수
 docker compose exec app python scripts/reset_db.py   # 개발 DB 초기화·시드 (데이터 전부 삭제)
-docker compose run --rm app pytest                   # 테스트 (coupon_rush_test DB 사용)
+make pytest                                          # 테스트 (coupon_rush_test DB 사용, 앱 컨테이너가 떠 있어야 함)
+make pytest ARGS="-s -k not_found"                   # print 보기 + 일부만
 curl -i -X POST localhost:8000/coupons/1/issue -H 'Content-Type: application/json' -d '{"user_id": 7}'
 ```
 
