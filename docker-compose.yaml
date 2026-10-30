@@ -7,6 +7,7 @@ services:
     ports:
       - "8000:8000"
     environment:
+      PYTHONUNBUFFERED: 1
       DATABASE_URL: postgresql+asyncpg://coupon_rush:coupon_rush@postgres:5432/coupon_rush
       TEST_DATABASE_URL: postgresql+asyncpg://coupon_rush:coupon_rush@postgres:5432/coupon_rush_test
     depends_on:
