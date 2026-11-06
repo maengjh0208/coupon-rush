@@ -69,23 +69,17 @@ async def issue_coupon(
     if already_issued:
         raise IssueRejected("ALREADY_ISSUED")
 
-    row = (
-        await conn.execute(
-            select(coupon.c.issued_quantity, coupon.c.total_quantity).where(coupon.c.id == coupon_id).with_for_update()
-        )
-    ).one_or_none()
-
-    if row is None:
-        raise CouponNotFound()
-
-    issued_quantity, total_quantity = row
-
-    if issued_quantity >= total_quantity:
-        raise IssueRejected("SOLD_OUT")
-
-    await conn.execute(
-        update(coupon).where(coupon.c.id == coupon_id).values(issued_quantity=issued_quantity + 1)
+    result = await conn.execute(
+        update(coupon)
+        .where(coupon.c.id == coupon_id, coupon.c.total_quantity > coupon.c.issued_quantity)
+        .values(issued_quantity=coupon.c.issued_quantity + 1)
     )
+    if result.rowcount == 0:
+        exists_coupon = (await conn.execute(select(exists().where(coupon.c.id == coupon_id)))).scalar_one()
+        if exists_coupon:
+            raise IssueRejected("SOLD_OUT")
+        else:
+            raise CouponNotFound()
 
     try:
         await conn.execute(

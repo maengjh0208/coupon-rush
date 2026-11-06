@@ -221,3 +221,5 @@ __marimo__/
 
 .idea/
 bench-results/
+
+data/
