@@ -21,14 +21,16 @@
 |---|---|---|
 | 4 | 동시 요청에서 재고보다 많이 발급된다 | 완료 ([04](specs_plans/04-over-issue-for-update.md)) |
 | 5 | 같은 사용자가 쿠폰을 두 장 이상 받는다 | 완료 ([05](specs_plans/05-duplicate-issue-unique.md)) |
-| 6 | FOR UPDATE는 락을 쥔 채 왕복 3번(SELECT → UPDATE → INSERT) + COMMIT을 해서, 락 보유 시간이 처리량 상한을 정한다 ([04](specs_plans/04-over-issue-for-update.md), [05](specs_plans/05-duplicate-issue-unique.md) 참고) | 진행 |
+| 6 | FOR UPDATE는 락을 쥔 채 왕복 3번(SELECT → UPDATE → INSERT) + COMMIT을 해서, 락 보유 시간이 처리량 상한을 정한다 ([04](specs_plans/04-over-issue-for-update.md), [05](specs_plans/05-duplicate-issue-unique.md) 참고) | 완료 ([06](specs_plans/06-conditional-update.md)) |
 | 16 | 같은 조건에서 저부하(RATE 100~500) p99가 실행마다 크게 흔들려 꼬리 지연을 비교할 수 없다 (RATE 100 p99 14~581ms, [05](specs_plans/05-duplicate-issue-unique.md) 참고) | 대기 |
+| 18 | 같은 코드·조건이라도 측정한 날(시각)이 다르면 포화 처리량이 크게 다르다 (05 코드 RATE 1000: 11-05 708 → 11-06 612, 같은 날에도 06 코드 546 → 608, [06](specs_plans/06-conditional-update.md) 참고) | 대기 |
 
 ## 3단계: DB가 병목이라면
 
 | # | 문제 | 상태 |
 |---|---|---|
-| 7 | 발급 요청이 몰리면 DB가 병목이 된다 (2단계 측정으로 확인 필요) | 대기 |
+| 17 | 처리량 상한을 app이 정한다. RATE 700부터 app CPU(`cpus: 1`, 워커 1)가 90~95%로 포화되고 postgres는 40% 근처에서 여유가 있다 ([06](specs_plans/06-conditional-update.md) 참고) | 대기 |
+| 7 | 발급 요청이 몰리면 DB가 병목이 된다 (06 기준 아직 아님. 문제 17로 app 상한을 올린 뒤 확인) | 대기 |
 | 8 | 재고를 Redis로 옮기면 Redis와 DB의 상태가 어긋날 수 있다 | 대기 |
 
 ## 4단계: 동기 처리의 한계
