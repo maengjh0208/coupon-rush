@@ -42,9 +42,9 @@ coupon_issue(id, coupon_id, user_id, issued_at)
 
 거절(409)은 `IssueRejected(code)`, 없는 쿠폰(404)은 `CouponNotFound`를 raise하고 exception handler가 `{"code": ...}` 응답으로 바꾼다. 발급 로직은 HTTP를 모른다. 요청 트랜잭션(`get_conn`의 `engine.begin()`)은 정상 return이면 COMMIT, 예외면 ROLLBACK이므로, 쓰기 이후의 거절도 반드시 예외로 빠져나간다.
 
-## 동시성 방식 전환
+## 동시성 방식의 발전
 
-API는 하나로 두고, 서버 기동 시 환경변수(`ISSUE_STRATEGY`)로 발급 구현체를 고른다. 측정 조건과 k6 스크립트를 모든 방식이 공유하기 위함이다. 구현체가 두 개가 되는 시점에 도입한다.
+방식을 나란히 두고 전환하지 않는다. 단계마다 이전 방식을 더 나은 방식으로 **대체**하고, 같은 bench 조건에서 이전 단계 결과와 비교한다. 이전 방식은 그 커밋 해시로 재현한다 (결과 폴더 이름에 해시가 있다).
 
 ## 프로젝트 구조 · 빌드 · 실행
 

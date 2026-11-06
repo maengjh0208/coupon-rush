@@ -21,7 +21,7 @@
 |---|---|---|
 | 4 | 동시 요청에서 재고보다 많이 발급된다 | 완료 ([04](specs_plans/04-over-issue-for-update.md)) |
 | 5 | 같은 사용자가 쿠폰을 두 장 이상 받는다 | 완료 ([05](specs_plans/05-duplicate-issue-unique.md)) |
-| 6 | DB 수준 해결책들의 처리량·지연 비용을 모른다 (FOR UPDATE의 락 비용과 app CPU 증폭이 분리되지 않음, [04](specs_plans/04-over-issue-for-update.md) 참고. 비교는 모든 방식에 UNIQUE가 있는 상태에서, [05](specs_plans/05-duplicate-issue-unique.md) 참고) | 대기 |
+| 6 | FOR UPDATE는 락을 쥔 채 왕복 3번(SELECT → UPDATE → INSERT) + COMMIT을 해서, 락 보유 시간이 처리량 상한을 정한다 ([04](specs_plans/04-over-issue-for-update.md), [05](specs_plans/05-duplicate-issue-unique.md) 참고) | 진행 |
 | 16 | 같은 조건에서 저부하(RATE 100~500) p99가 실행마다 크게 흔들려 꼬리 지연을 비교할 수 없다 (RATE 100 p99 14~581ms, [05](specs_plans/05-duplicate-issue-unique.md) 참고) | 대기 |
 
 ## 3단계: DB가 병목이라면
