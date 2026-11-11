@@ -1,10 +1,9 @@
 services:
   app:
-    command: uvicorn coupon_rush.main:app --host 0.0.0.0 --port 8000 --timeout-keep-alive 30 --loop uvloop --http httptools
-    cpus: 1
+    command: uvicorn coupon_rush.main:app --host 0.0.0.0 --port 8000 --workers 2 --timeout-keep-alive 30 --loop uvloop --http httptools
+    cpus: 2
     mem_limit: 512m
 
   postgres:
     cpus: 2
     mem_limit: 1g
-
