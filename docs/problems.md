@@ -30,8 +30,8 @@
 | # | 문제 | 상태 |
 |---|---|---|
 | 17 | 처리량 상한을 app이 정한다. RATE 700부터 app CPU(`cpus: 1`, 워커 1)가 90~95%로 포화되고 postgres는 40% 근처에서 여유가 있다 ([06](specs_plans/06-conditional-update.md) 참고) | 완료 ([17](specs_plans/17-app-capacity.md)) |
-| 7 | 모든 요청이 쿠폰 row 하나의 행 락을 줄 서서 지나가서(hot row), 락 보유 시간이 처리량 상한을 정한다. 2워커에서 약 1100 req/s, CPU는 app·postgres 모두 절반만 쓰고 커넥션 대부분이 락 대기 ([17](specs_plans/17-app-capacity.md) 참고) | 대기 |
-| 8 | 재고를 Redis로 옮기면 Redis와 DB의 상태가 어긋날 수 있다 | 대기 |
+| 7 | 모든 요청이 쿠폰 row 하나의 행 락을 줄 서서 지나가서(hot row), 락 보유 시간이 처리량 상한을 정한다. 2워커에서 약 1100 req/s, CPU는 app·postgres 모두 절반만 쓰고 커넥션 대부분이 락 대기 ([17](specs_plans/17-app-capacity.md) 참고) | 진행 ([07](specs_plans/07-hot-row.md)) |
+| 8 | 재고를 Redis로 옮기면 Redis와 DB의 상태가 어긋날 수 있다 (DECR 후 app 장애·COMMIT 실패로 재고 유실, Redis 재시작·오래된 스냅샷 복구·failover로 재고 값이 사라지거나 과거로 돌아감) | 대기 |
 
 ## 4단계: 동기 처리의 한계
 
