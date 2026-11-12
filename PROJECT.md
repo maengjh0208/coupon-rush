@@ -62,8 +62,8 @@ docker/postgres/init/       최초 볼륨 생성 시 실행되는 SQL (테스트
 ```bash
 docker compose up -d --build                         # 의존성(pyproject/uv.lock) 변경 시 --build 필수
 docker compose exec app python scripts/reset_db.py   # 개발 DB 초기화·시드 (데이터 전부 삭제)
-make pytest                                          # 테스트 (coupon_rush_test DB 사용, 앱 컨테이너가 떠 있어야 함)
-make pytest ARGS="-s -k not_found"                   # print 보기 + 일부만
+make test                                            # 테스트 (coupon_rush_test DB 사용, 앱 컨테이너가 떠 있어야 함)
+make test ARGS="-s -k not_found"                     # print 보기 + 일부만
 curl -i -X POST localhost:8000/coupons/1/issue -H 'Content-Type: application/json' -d '{"user_id": 7}'
 ```
 

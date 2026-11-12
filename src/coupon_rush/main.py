@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from sqlalchemy import insert, select, update, exists
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncConnection
+import redis.asyncio as aioredis
 
 from coupon_rush.tables import coupon_issue, coupon
 
@@ -15,13 +16,20 @@ from coupon_rush.tables import coupon_issue, coupon
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     app.state.engine = create_async_engine(os.environ["DATABASE_URL"])
+    app.state.redis = aioredis.from_url(os.environ["REDIS_URL"])
+    await app.state.redis.ping()  # fail fast: from_url은 연결을 미리 맺지 않음
+
     yield
+
+    # 종료 순서는 만든 순서의 역순으로 정리하는걸 습관화.
+    await app.state.redis.aclose()
     await app.state.engine.dispose()
 
 
 app = FastAPI(lifespan=lifespan)
 
 
+# ERROR 클래스 정리
 class IssueRejected(Exception):
     def __init__(self, code: str):
         self.code = code
@@ -31,6 +39,7 @@ class CouponNotFound(Exception):
     pass
 
 
+# Exception Handler 정리
 @app.exception_handler(IssueRejected)
 async def issue_rejected_handler(request: Request, exc: IssueRejected) -> JSONResponse:
     return JSONResponse(status_code=409, content={"code": exc.code})
@@ -41,11 +50,20 @@ async def coupon_not_found_handler(request: Request, exc: CouponNotFound) -> JSO
     return JSONResponse(status_code=404, content={"code": "COUPON_NOT_FOUND"})
 
 
+# 의존성 정리
 async def get_conn(request: Request) -> AsyncIterator[AsyncConnection]:
     async with request.app.state.engine.begin() as conn:
         yield conn
 
 
+async def get_redis(request: Request) -> aioredis.Redis:
+    # get_conn은 요청이 끝나면 트랜잭션 COMMIT/ROLLBACK 정리 작업을 해야해서 yield가 필요하지만
+    # Redis 클라이언트는 요청마다 정리할 게 없음. 명령마다 풀에서 연결을 빌리고 바로 반환함.
+    # 함수로 감싸는 이유는 테스트코드에서 app.dependency_overrides[get_redis] = ... 로 테스트용을 끼워넣기 위해서임.
+    return request.app.state.redis
+
+
+# DTO 정리
 class IssueRequest(BaseModel):
     user_id: int
 
