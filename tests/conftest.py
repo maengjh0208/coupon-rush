@@ -6,8 +6,9 @@ from httpx import AsyncClient, ASGITransport
 from sqlalchemy import text, insert
 from sqlalchemy.engine.url import make_url
 from sqlalchemy.ext.asyncio import create_async_engine
+import redis.asyncio as aioredis
 
-from coupon_rush.main import app, get_conn
+from coupon_rush.main import app, get_conn, get_redis, redis_stock_key
 from coupon_rush.tables import metadata, coupon
 
 
@@ -32,7 +33,16 @@ async def test_engine():
 
 
 @pytest.fixture
-async def client(test_engine):
+async def redis():
+    r = aioredis.from_url(os.environ["TEST_REDIS_URL"])
+    assert r.connection_pool.connection_kwargs.get("db", 0) != 0, "테스트 Redis DB가 아님"
+    await r.flushdb()  # 현재 DB 번호만 비움
+    yield r
+    await r.aclose()
+
+
+@pytest.fixture
+async def client(test_engine, redis):
     async with test_engine.begin() as conn:
         await conn.execute(text("TRUNCATE coupon_issue, coupon RESTART IDENTITY CASCADE"))
 
@@ -41,6 +51,8 @@ async def client(test_engine):
             yield conn
 
     app.dependency_overrides[get_conn] = override_get_conn
+    app.dependency_overrides[get_redis] = lambda: redis
+
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         yield c
     app.dependency_overrides.clear()
@@ -48,7 +60,7 @@ async def client(test_engine):
 
 # client의 TRUNCATE 이후에 INSERT 되도록 client에 의존
 @pytest.fixture
-async def create_coupon(client, test_engine):
+async def create_coupon(client, test_engine, redis):
     # fixture는 인자를 받을 수 없음. 그래서 인자를 받는 함수를 돌려주고, 테스트 안에서 원하는 값으로 호출할 수 있게 하는 factory as fixture 패턴 사용
     async def _create(total_quantity: int = 100):
         async with test_engine.begin() as conn:
@@ -57,7 +69,11 @@ async def create_coupon(client, test_engine):
                 .values(name="선착순 쿠폰", total_quantity=total_quantity, starts_at=datetime.now(UTC))
                 .returning(coupon.c.id)
             )
-        return result.scalar_one()
+
+        coupon_id = result.scalar_one()
+        await redis.set(redis_stock_key(coupon_id), total_quantity)
+
+        return coupon_id
 
     return _create
 

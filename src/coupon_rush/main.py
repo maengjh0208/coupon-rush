@@ -29,6 +29,11 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 
 
+# Redis Key 정리
+def redis_stock_key(coupon_id: int) -> str:
+    return f"coupon:{coupon_id}:stock"
+
+
 # ERROR 클래스 정리
 class IssueRejected(Exception):
     def __init__(self, code: str):
