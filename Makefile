@@ -1,4 +1,4 @@
-.PHONY: reset-db pytest bench ruff
+.PHONY: reset-db pytest bench fmt
 
 reset-db:
 	docker compose exec app python scripts/reset_db.py $(QTY)
@@ -9,6 +9,6 @@ pytest:
 bench:
 	./scripts/bench.sh
 
-ruff:
+fmt:
 	docker compose exec app ruff format .
 
