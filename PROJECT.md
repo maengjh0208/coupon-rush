@@ -9,7 +9,7 @@ FastAPI 기반 선착순 쿠폰 발급 시스템. 동시성 제어 방식을 단
 - FastAPI (async), uvicorn
 - Python 3.14, uv
 - PostgreSQL 18, SQLAlchemy 2.1 async Core (테이블도 Core `Table`로 정의) + asyncpg
-- Redis (3단계부터)
+- Redis 8 (3단계부터, 문제 7). 개발은 DB 0, 테스트는 DB 1 (`REDIS_URL`, `TEST_REDIS_URL`)
 - Docker Compose: 컨테이너별 `cpus`, `mem_limit`로 자원 고정
 - k6: 호스트에서 실행
 
@@ -32,11 +32,16 @@ FastAPI 기반 선착순 쿠폰 발급 시스템. 동시성 제어 방식을 단
 ## 데이터 모델
 
 ```
-coupon(id, name, total_quantity, issued_quantity, starts_at)
+coupon(id, name, total_quantity, starts_at)
 coupon_issue(id, coupon_id, user_id, issued_at)
+
+Redis
+coupon:{id}:stock    남은 재고 (redis_stock_key())
 ```
 
 `coupon_issue(coupon_id, user_id)` UNIQUE 제약으로 중복 발급을 막는다 (문제 5).
+
+재고 차감은 Redis `DECR`로 한다 (문제 7). 발급 수의 원천은 `coupon_issue` row 수다. Redis 재고가 의심스러우면 `total_quantity - COUNT(coupon_issue)`로 다시 계산한다 (문제 8). `reserve_stock()`이 DECR과, 블록 안에서 예외가 났을 때의 INCR 되돌리기를 묶는다.
 
 ## 발급 거절과 트랜잭션
 
@@ -49,9 +54,9 @@ coupon_issue(id, coupon_id, user_id, issued_at)
 ## 프로젝트 구조 · 빌드 · 실행
 
 ```
-src/coupon_rush/main.py     FastAPI 앱, lifespan(엔진), get_conn, 엔드포인트
+src/coupon_rush/main.py     FastAPI 앱, lifespan(엔진, Redis), get_conn, get_redis, reserve_stock, 엔드포인트
 src/coupon_rush/tables.py   SQLAlchemy Core 테이블 정의 (metadata)
-tests/conftest.py           테스트 엔진(drop/create_all), client(TRUNCATE + get_conn override), coupon_id seed
+tests/conftest.py           테스트 엔진(drop/create_all), redis(DB 1, flushdb), client(TRUNCATE + get_conn/get_redis override), create_coupon(DB row + Redis 재고 seed)
 scripts/reset_db.py         개발 DB 초기화 + 쿠폰 1개 시드
 experiments/                개념 확인용 일회성 실험 스크립트
 docker/postgres/init/       최초 볼륨 생성 시 실행되는 SQL (테스트 DB 생성)
@@ -62,8 +67,8 @@ docker/postgres/init/       최초 볼륨 생성 시 실행되는 SQL (테스트
 ```bash
 docker compose up -d --build                         # 의존성(pyproject/uv.lock) 변경 시 --build 필수
 docker compose exec app python scripts/reset_db.py   # 개발 DB 초기화·시드 (데이터 전부 삭제)
-make test                                            # 테스트 (coupon_rush_test DB 사용, 앱 컨테이너가 떠 있어야 함)
-make test ARGS="-s -k not_found"                     # print 보기 + 일부만
+make pytest                                          # 테스트 (coupon_rush_test DB 사용, 앱 컨테이너가 떠 있어야 함)
+make pytest ARGS="-s -k not_found"                   # print 보기 + 일부만
 curl -i -X POST localhost:8000/coupons/1/issue -H 'Content-Type: application/json' -d '{"user_id": 7}'
 ```
 

@@ -5,7 +5,7 @@ from typing import AsyncIterator, Annotated
 from fastapi import FastAPI, Request, Depends
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from sqlalchemy import insert, select, update, exists
+from sqlalchemy import insert, select, exists
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncConnection
 import redis.asyncio as aioredis
@@ -29,12 +29,12 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 
 
-# Redis Key 정리
+# Redis Key
 def redis_stock_key(coupon_id: int) -> str:
     return f"coupon:{coupon_id}:stock"
 
 
-# ERROR 클래스 정리
+# ERROR 클래스
 class IssueRejected(Exception):
     def __init__(self, code: str):
         self.code = code
@@ -44,7 +44,7 @@ class CouponNotFound(Exception):
     pass
 
 
-# Exception Handler 정리
+# Exception Handler
 @app.exception_handler(IssueRejected)
 async def issue_rejected_handler(request: Request, exc: IssueRejected) -> JSONResponse:
     return JSONResponse(status_code=409, content={"code": exc.code})
@@ -68,7 +68,22 @@ async def get_redis(request: Request) -> aioredis.Redis:
     return request.app.state.redis
 
 
-# DTO 정리
+# Context Manager
+@asynccontextmanager
+async def reserve_stock(redis: aioredis.Redis, coupon_id: int) -> AsyncIterator[None]:
+    # 재고 1개 예약. 예외가 발생하면 재고를 되돌림.
+    key = redis_stock_key(coupon_id)
+    if await redis.decr(key) < 0:
+        await redis.incr(key)
+        raise IssueRejected("SOLD_OUT")
+    try:
+        yield
+    except BaseException:
+        await redis.incr(key)
+        raise
+
+
+# DTO
 class IssueRequest(BaseModel):
     user_id: int
 
@@ -78,10 +93,15 @@ class IssueRequest(BaseModel):
     status_code=201,
 )
 async def issue_coupon(
-        coupon_id: int,
-        body: IssueRequest,
-        conn: Annotated[AsyncConnection, Depends(get_conn)],
+    coupon_id: int,
+    body: IssueRequest,
+    conn: Annotated[AsyncConnection, Depends(get_conn)],
+    redis: Annotated[aioredis.Redis, Depends(get_redis)],
 ):
+    coupon_exists = (await conn.execute(select(exists().where(coupon.c.id == coupon_id)))).scalar_one()
+    if not coupon_exists:
+        raise CouponNotFound()
+
     # 빠른 거절용 (락 전에 대부분의 중복을 걸러냄). 동시 중복의 최종 방어는 UNIQUE 제약
     already_issued = (
         await conn.execute(
@@ -92,21 +112,9 @@ async def issue_coupon(
     if already_issued:
         raise IssueRejected("ALREADY_ISSUED")
 
-    result = await conn.execute(
-        update(coupon)
-        .where(coupon.c.id == coupon_id, coupon.c.total_quantity > coupon.c.issued_quantity)
-        .values(issued_quantity=coupon.c.issued_quantity + 1)
-    )
-    if result.rowcount == 0:
-        exists_coupon = (await conn.execute(select(exists().where(coupon.c.id == coupon_id)))).scalar_one()
-        if exists_coupon:
-            raise IssueRejected("SOLD_OUT")
-        else:
-            raise CouponNotFound()
-
-    try:
-        await conn.execute(
-            insert(coupon_issue).values(coupon_id=coupon_id, user_id=body.user_id)
-        )
-    except IntegrityError as e:
-        raise IssueRejected("ALREADY_ISSUED") from e
+    # 쿠폰 재고 차감 및 쿠폰 발급
+    async with reserve_stock(redis, coupon_id):
+        try:
+            await conn.execute(insert(coupon_issue).values(coupon_id=coupon_id, user_id=body.user_id))
+        except IntegrityError as e:
+            raise IssueRejected("ALREADY_ISSUED") from e

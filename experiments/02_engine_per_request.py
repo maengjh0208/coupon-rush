@@ -31,9 +31,7 @@ async def main():
     handler = handle_request_bad if mode == "bad" else handle_request_good
 
     start = time.perf_counter()
-    results = await asyncio.gather(
-        *(handler() for _ in range(concurrency)), return_exceptions=True
-    )
+    results = await asyncio.gather(*(handler() for _ in range(concurrency)), return_exceptions=True)
     errors = [r for r in results if isinstance(r, Exception)]
     print(f"[{mode}] 동시 {concurrency}개, {time.perf_counter() - start:.1f}s, 실패 {len(errors)}개")
     if errors:

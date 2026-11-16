@@ -4,7 +4,8 @@ import pytest
 
 from sqlalchemy import select, func
 
-from coupon_rush.tables import coupon_issue, coupon
+from coupon_rush.main import redis_stock_key
+from coupon_rush.tables import coupon_issue
 
 pytestmark = pytest.mark.anyio
 
@@ -38,32 +39,14 @@ async def test_concurrent_requests_do_not_exceed_quantity(client, test_engine, c
     total_quantity = 10
     coupon_id = await create_coupon(total_quantity=total_quantity)
 
-    await asyncio.gather(*(
-        client.post(f"/coupons/{coupon_id}/issue", json={"user_id": user_id}) for user_id in range(1, 101)
-    ))
+    await asyncio.gather(
+        *(client.post(f"/coupons/{coupon_id}/issue", json={"user_id": user_id}) for user_id in range(1, 101))
+    )
 
     async with test_engine.connect() as conn:
-        issued_rows = (
-            await conn.execute(select(func.count()).select_from(coupon_issue))
-        ).scalar_one()
+        issued_rows = (await conn.execute(select(func.count()).select_from(coupon_issue))).scalar_one()
 
     assert issued_rows == total_quantity
-
-
-async def test_concurrent_requests_keep_issued_quantity_in_sync(client, test_engine, create_coupon):
-    coupon_id = await create_coupon(total_quantity=1000)
-
-    user_count = 100
-    await asyncio.gather(*(
-        client.post(f"/coupons/{coupon_id}/issue", json={"user_id": user_id}) for user_id in range(1, user_count + 1)
-    ))
-
-    async with test_engine.connect() as conn:
-        issued_quantity = (
-            await conn.execute(select(coupon.c.issued_quantity).where(coupon.c.id == coupon_id))
-        ).scalar_one()
-
-    assert issued_quantity == user_count
 
 
 async def test_returns_already_issued_when_user_requests_twice(client, coupon_id):
@@ -77,31 +60,18 @@ async def test_returns_already_issued_when_user_requests_twice(client, coupon_id
 
 async def test_concurrent_requests_from_same_user_issue_only_once(client, test_engine, coupon_id):
     # 같은 user 동시에 10번 요청
-    await asyncio.gather(*(
-        client.post(f"/coupons/{coupon_id}/issue", json={"user_id": 1}) for _ in range(10)
-    ))
+    await asyncio.gather(*(client.post(f"/coupons/{coupon_id}/issue", json={"user_id": 1}) for _ in range(10)))
 
     async with test_engine.connect() as conn:
         issued_rows = (
-            await conn.execute(select(func.count()).select_from(coupon_issue).where(coupon_issue.c.user_id == 1,
-                                                                                    coupon_issue.c.coupon_id == coupon_id))
+            await conn.execute(
+                select(func.count())
+                .select_from(coupon_issue)
+                .where(coupon_issue.c.user_id == 1, coupon_issue.c.coupon_id == coupon_id)
+            )
         ).scalar_one()
 
     assert issued_rows == 1
-
-
-async def test_concurrent_requests_from_same_user_keep_issued_quantity_in_sync(client, test_engine, coupon_id):
-    # 같은 user 동시에 10번 요청
-    await asyncio.gather(*(
-        client.post(f"/coupons/{coupon_id}/issue", json={"user_id": 1}) for _ in range(10)
-    ))
-
-    async with test_engine.connect() as conn:
-        issued_quantity = (
-            await conn.execute(select(coupon.c.issued_quantity).where(coupon.c.id == coupon_id))
-        ).scalar_one()
-
-    assert issued_quantity == 1
 
 
 async def test_returns_not_found_when_coupon_does_not_exist(client):
@@ -109,3 +79,13 @@ async def test_returns_not_found_when_coupon_does_not_exist(client):
 
     assert response.status_code == 404
     assert response.json() == {"code": "COUPON_NOT_FOUND"}
+
+
+async def test_returns_sold_out_when_redis_stock_is_zero(client, redis, create_coupon):
+    coupon_id = await create_coupon(total_quantity=10)
+    await redis.set(redis_stock_key(coupon_id), 0)
+
+    response = await client.post(f"/coupons/{coupon_id}/issue", json={"user_id": 1})
+
+    assert response.status_code == 409
+    assert response.json() == {"code": "SOLD_OUT"}
