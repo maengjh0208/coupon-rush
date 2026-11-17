@@ -7,7 +7,7 @@ pytest:
 	docker compose exec app pytest -v $(ARGS)
 
 bench:
-	./scripts/bench.sh RATES=1500
+	./scripts/bench.sh
 
 fmt:
 	docker compose exec app ruff format .
