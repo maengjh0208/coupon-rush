@@ -1,4 +1,4 @@
-.PHONY: reset-db pytest bench fmt
+.PHONY: reset-db pytest bench formatter linter
 
 reset-db:
 	docker compose exec app python scripts/reset_db.py $(QTY)
@@ -9,6 +9,9 @@ pytest:
 bench:
 	./scripts/bench.sh
 
-fmt:
+formatter:
 	docker compose exec app ruff format .
 
+# make linter ARGS=--fix
+linter:
+	docker compose exec app ruff check . $(ARGS)

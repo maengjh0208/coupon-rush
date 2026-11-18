@@ -1,8 +1,7 @@
 import asyncio
 
 import pytest
-
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 
 from coupon_rush.main import redis_stock_key
 from coupon_rush.tables import coupon_issue
@@ -89,3 +88,17 @@ async def test_returns_sold_out_when_redis_stock_is_zero(client, redis, create_c
 
     assert response.status_code == 409
     assert response.json() == {"code": "SOLD_OUT"}
+
+
+async def test_returns_sold_out_when_redis_stock_is_stale(client, redis, create_coupon):
+    coupon_id = await create_coupon(total_quantity=1)
+    first = await client.post(f"/coupons/{coupon_id}/issue", json={"user_id": 1})
+    assert first.status_code == 201
+
+    key = redis_stock_key(coupon_id)
+    await redis.set(key, 1)  # 오래된 스냅샷 복구 흉내
+
+    response = await client.post(f"/coupons/{coupon_id}/issue", json={"user_id": 2})
+    assert response.status_code == 409
+    assert response.json() == {"code": "SOLD_OUT"}
+    assert int(await redis.get(key)) == 0

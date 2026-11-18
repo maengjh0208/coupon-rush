@@ -1,16 +1,17 @@
 import os
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import AsyncIterator, Annotated
+from typing import Annotated
 
-from fastapi import FastAPI, Request, Depends
+import redis.asyncio as aioredis
+from fastapi import Depends, FastAPI, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from sqlalchemy import insert, select, exists
+from sqlalchemy import exists, insert, select, update
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncConnection
-import redis.asyncio as aioredis
+from sqlalchemy.ext.asyncio import AsyncConnection, create_async_engine
 
-from coupon_rush.tables import coupon_issue, coupon
+from coupon_rush.tables import coupon, coupon_issue
 
 
 @asynccontextmanager
@@ -35,24 +36,29 @@ def redis_stock_key(coupon_id: int) -> str:
 
 
 # ERROR 클래스
-class IssueRejected(Exception):
-    def __init__(self, code: str):
-        self.code = code
+class AppError(Exception):
+    status_code: int
+    code: str
 
 
-class CouponNotFound(Exception):
-    pass
+class CouponNotFound(AppError):
+    status_code = 404
+    code = "COUPON_NOT_FOUND"
 
 
-# Exception Handler
-@app.exception_handler(IssueRejected)
-async def issue_rejected_handler(request: Request, exc: IssueRejected) -> JSONResponse:
-    return JSONResponse(status_code=409, content={"code": exc.code})
+class CouponSoldOut(AppError):
+    status_code = 409
+    code = "SOLD_OUT"
 
 
-@app.exception_handler(CouponNotFound)
-async def coupon_not_found_handler(request: Request, exc: CouponNotFound) -> JSONResponse:
-    return JSONResponse(status_code=404, content={"code": "COUPON_NOT_FOUND"})
+class DuplicateCouponIssue(AppError):
+    status_code = 409
+    code = "ALREADY_ISSUED"
+
+
+@app.exception_handler(AppError)
+async def app_error_handler(request: Request, exc: AppError) -> JSONResponse:
+    return JSONResponse(status_code=exc.status_code, content={"code": exc.code})
 
 
 # 의존성 정리
@@ -75,9 +81,12 @@ async def reserve_stock(redis: aioredis.Redis, coupon_id: int) -> AsyncIterator[
     key = redis_stock_key(coupon_id)
     if await redis.decr(key) < 0:
         await redis.incr(key)
-        raise IssueRejected("SOLD_OUT")
+        raise CouponSoldOut()
+
     try:
         yield
+    except CouponSoldOut:
+        raise
     except BaseException:
         await redis.incr(key)
         raise
@@ -110,11 +119,20 @@ async def issue_coupon(
     ).scalar_one()
 
     if already_issued:
-        raise IssueRejected("ALREADY_ISSUED")
+        raise DuplicateCouponIssue()
 
     # 쿠폰 재고 차감 및 쿠폰 발급
     async with reserve_stock(redis, coupon_id):
+        # UPDATE를 INSERT보다 먼저: INSERT가 먼저면 FK 검사의 KEY SHARE가 hot row에 몰려 MultiXact 경합
+        result = await conn.execute(
+            update(coupon)
+            .where(coupon.c.id == coupon_id, coupon.c.total_quantity > coupon.c.issued_quantity)
+            .values(issued_quantity=coupon.c.issued_quantity + 1)
+        )
+        if result.rowcount == 0:
+            raise CouponSoldOut()
+
         try:
             await conn.execute(insert(coupon_issue).values(coupon_id=coupon_id, user_id=body.user_id))
         except IntegrityError as e:
-            raise IssueRejected("ALREADY_ISSUED") from e
+            raise DuplicateCouponIssue() from e

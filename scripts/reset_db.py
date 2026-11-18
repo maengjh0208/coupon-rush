@@ -3,12 +3,12 @@ import os
 import sys
 from datetime import UTC, datetime
 
+import redis.asyncio as aioredis
 from sqlalchemy import insert
 from sqlalchemy.ext.asyncio import create_async_engine
-import redis.asyncio as aioredis
 
 from coupon_rush.main import redis_stock_key
-from coupon_rush.tables import metadata, coupon
+from coupon_rush.tables import coupon, metadata
 
 TOTAL_QUANTITY = int(sys.argv[1]) if len(sys.argv) > 1 else 100
 

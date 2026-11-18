@@ -8,8 +8,8 @@ from sqlalchemy import (
     MetaData,
     Table,
     Text,
-    func,
     UniqueConstraint,
+    func,
 )
 
 metadata = MetaData()  # 테이블 정의
@@ -20,6 +20,7 @@ coupon = Table(
     Column("id", BigInteger, Identity(), primary_key=True),  # Identity: postgreSQL의 표준 자동 증가 방식
     Column("name", Text, nullable=False),
     Column("total_quantity", Integer, nullable=False),
+    Column("issued_quantity", Integer, nullable=False, server_default="0"),
     Column("starts_at", DateTime(timezone=True), nullable=False),  # 시간은 항상 타임존을 포함해서 저장하기
 )
 

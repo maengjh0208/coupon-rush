@@ -2,14 +2,14 @@ import os
 from datetime import UTC, datetime
 
 import pytest
-from httpx import AsyncClient, ASGITransport
-from sqlalchemy import text, insert
+import redis.asyncio as aioredis
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy import insert, text
 from sqlalchemy.engine.url import make_url
 from sqlalchemy.ext.asyncio import create_async_engine
-import redis.asyncio as aioredis
 
 from coupon_rush.main import app, get_conn, get_redis, redis_stock_key
-from coupon_rush.tables import metadata, coupon
+from coupon_rush.tables import coupon, metadata
 
 
 @pytest.fixture(scope="session")
