@@ -32,7 +32,7 @@ FastAPI 기반 선착순 쿠폰 발급 시스템. 동시성 제어 방식을 단
 ## 데이터 모델
 
 ```
-coupon(id, name, total_quantity, starts_at)
+coupon(id, name, total_quantity, issued_quantity, starts_at)
 coupon_issue(id, coupon_id, user_id, issued_at)
 
 Redis
@@ -41,7 +41,9 @@ coupon:{id}:stock    남은 재고 (redis_stock_key())
 
 `coupon_issue(coupon_id, user_id)` UNIQUE 제약으로 중복 발급을 막는다 (문제 5).
 
-재고 차감은 Redis `DECR`로 한다 (문제 7). 발급 수의 원천은 `coupon_issue` row 수다. Redis 재고가 의심스러우면 `total_quantity - COUNT(coupon_issue)`로 다시 계산한다 (문제 8). `reserve_stock()`이 DECR과, 블록 안에서 예외가 났을 때의 INCR 되돌리기를 묶는다.
+Redis `DECR`은 빠른 거절용이다 (문제 7). 수량의 최종 방어선은 DB의 `UPDATE coupon SET issued_quantity = issued_quantity + 1 WHERE issued_quantity < total_quantity`다 (문제 8). 순서는 EXISTS → DECR → UPDATE → INSERT이고, UPDATE가 INSERT보다 먼저인 이유는 FK의 KEY SHARE 경합 때문이다 (07 A). `reserve_stock()`은 DECR과, 블록 안에서 예외가 났을 때의 INCR 되돌리기를 묶는다. 단 `CouponSoldOut`(DB가 매진으로 거절)은 되돌리지 않는다. Redis가 실제보다 많이 갖고 있었다는 뜻이라서, 거절될 때마다 줄어들어 스스로 맞춰진다.
+
+에러 응답은 `AppError` 서브클래스의 클래스 속성(`status_code`, `code`)과 핸들러 하나로 만든다.
 
 ## 발급 거절과 트랜잭션
 
