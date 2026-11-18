@@ -3,6 +3,8 @@ set -euo pipefail
 
 RATES=${RATES:-"100 300 500 700 1000"}
 RUNS=${RUNS:-3}
+QTY=${QTY:-100000}
+
 COMPOSE="docker compose -f docker-compose.yaml -f docker-compose.bench.yaml"
 OUT="bench-results/$(date +%Y%m%d-%H%M%S)-$(git rev-parse --short HEAD)"
 
@@ -13,7 +15,7 @@ for rate in $RATES; do
   for run in $(seq 1 "$RUNS"); do
     file="$OUT/rate${rate}-run${run}.txt"
     echo "RATE=$rate run=$run"
-    $COMPOSE exec -T app python scripts/reset_db.py 100000
+    $COMPOSE exec -T app python scripts/reset_db.py "$QTY"
     k6 run --quiet -e RATE="$rate" k6/issue.js > "$file" 2>&1
 
     rows=$($COMPOSE exec -T postgres psql -U coupon_rush -tAc "SELECT count(*) FROM coupon_issue;")

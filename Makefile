@@ -6,6 +6,7 @@ reset-db:
 pytest:
 	docker compose exec app pytest -v $(ARGS)
 
+# make bench RATES=2000
 bench:
 	./scripts/bench.sh
 
