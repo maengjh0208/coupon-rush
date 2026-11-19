@@ -7,7 +7,7 @@ import redis.asyncio as aioredis
 from fastapi import Depends, FastAPI, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from sqlalchemy import exists, insert, select, update
+from sqlalchemy import exists, func, insert, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncConnection, create_async_engine
 
@@ -54,6 +54,11 @@ class CouponSoldOut(AppError):
 class DuplicateCouponIssue(AppError):
     status_code = 409
     code = "ALREADY_ISSUED"
+
+
+class CouponNotStarted(AppError):
+    status_code = 409
+    code = "NOT_STARTED"
 
 
 @app.exception_handler(AppError)
@@ -107,9 +112,12 @@ async def issue_coupon(
     conn: Annotated[AsyncConnection, Depends(get_conn)],
     redis: Annotated[aioredis.Redis, Depends(get_redis)],
 ):
-    coupon_exists = (await conn.execute(select(exists().where(coupon.c.id == coupon_id)))).scalar_one()
-    if not coupon_exists:
+    result = await conn.execute(select(coupon.c.starts_at <= func.now()).where(coupon.c.id == coupon_id))
+    started = result.scalar_one_or_none()
+    if started is None:
         raise CouponNotFound()
+    if not started:
+        raise CouponNotStarted()
 
     # 빠른 거절용 (락 전에 대부분의 중복을 걸러냄). 동시 중복의 최종 방어는 UNIQUE 제약
     already_issued = (

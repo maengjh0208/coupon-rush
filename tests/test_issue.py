@@ -1,4 +1,5 @@
 import asyncio
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from sqlalchemy import func, select
@@ -102,3 +103,10 @@ async def test_returns_sold_out_when_redis_stock_is_stale(client, redis, create_
     assert response.status_code == 409
     assert response.json() == {"code": "SOLD_OUT"}
     assert int(await redis.get(key)) == 0
+
+
+async def test_returns_not_started_before_starts_at(client, create_coupon):
+    coupon_id = await create_coupon(starts_at=datetime.now(UTC) + timedelta(hours=1))
+    response = await client.post(f"/coupons/{coupon_id}/issue", json={"user_id": 1})
+    assert response.status_code == 409
+    assert response.json() == {"code": "NOT_STARTED"}

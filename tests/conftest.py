@@ -62,11 +62,15 @@ async def client(test_engine, redis):
 @pytest.fixture
 async def create_coupon(client, test_engine, redis):
     # fixture는 인자를 받을 수 없음. 그래서 인자를 받는 함수를 돌려주고, 테스트 안에서 원하는 값으로 호출할 수 있게 하는 factory as fixture 패턴 사용
-    async def _create(total_quantity: int = 100):
+    async def _create(total_quantity: int = 100, starts_at: datetime | None = None):
         async with test_engine.begin() as conn:
             result = await conn.execute(
                 insert(coupon)
-                .values(name="선착순 쿠폰", total_quantity=total_quantity, starts_at=datetime.now(UTC))
+                .values(
+                    name="선착순 쿠폰",
+                    total_quantity=total_quantity,
+                    starts_at=starts_at or datetime.now(UTC),
+                )
                 .returning(coupon.c.id)
             )
 
