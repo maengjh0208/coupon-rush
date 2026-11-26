@@ -31,7 +31,7 @@
 |---|---|---|
 | 17 | 처리량 상한을 app이 정한다. RATE 700부터 app CPU(`cpus: 1`, 워커 1)가 90~95%로 포화되고 postgres는 40% 근처에서 여유가 있다 ([06](specs_plans/06-conditional-update.md) 참고) | 완료 ([17](specs_plans/17-app-capacity.md)) |
 | 7 | 모든 요청이 쿠폰 row 하나의 행 락을 줄 서서 지나가서(hot row), 락 보유 시간이 처리량 상한을 정한다. 2워커에서 약 1100 req/s, CPU는 app·postgres 모두 절반만 쓰고 커넥션 대부분이 락 대기 ([17](specs_plans/17-app-capacity.md) 참고) | 완료 ([07](specs_plans/07-hot-row.md)) |
-| 20 | 재고를 Redis로 옮긴 뒤 처리량 상한을 다시 app CPU가 정한다. 2워커 / `cpus: 2`에서 약 1450 req/s, app CPU 200% 포화, postgres 60~70% (요청당 app CPU 약 1.4ms, [07](specs_plans/07-hot-row.md) 참고) | 대기 |
+| 20 | 재고를 Redis로 옮긴 뒤 처리량 상한을 다시 app CPU가 정한다. 2워커 / `cpus: 2`에서 약 1450 req/s, app CPU 200% 포화, postgres 60~70% (요청당 app CPU 약 1.4ms, [07](specs_plans/07-hot-row.md) 참고) | 완료 ([20](specs_plans/20-early-sold-out-reject.md), 매진이면 DB 전에 Redis GET으로 거절, 포화 처리량 약 +33%) |
 | 8 | 재고를 Redis로 옮기면 Redis와 DB의 상태가 어긋날 수 있다 (DECR 후 app 장애·COMMIT 실패로 재고 유실, Redis 재시작·오래된 스냅샷 복구·failover로 재고 값이 사라지거나 과거로 돌아감) | 완료 ([08](specs_plans/08-redis-db-divergence.md), DB 조건부 UPDATE를 최종 방어선으로) |
 | 21 | Redis가 재시작되면 재시작 후 첫 요청이 500으로 실패한다. app 연결 풀에 남은 끊긴 연결을 그대로 써서 `redis.exceptions.ConnectionError: Connection closed by server`가 난다. DECR 전에 실패해서 재고는 어긋나지 않는다 (11-18 문제 8 kill 재현에서 2회 확인) | 완료 ([21](specs_plans/21-redis-restart-stale-connection.md), 고치지 않기로 결정: DECR 재시도는 이중 차감 위험) |
 | 22 | DB를 최종 방어선으로 두면(문제 8) 발급에 성공하는 모든 요청이 다시 쿠폰 row의 행 락을 지나간다. 수량이 요청 수보다 크면 Redis가 걸러내는 요청이 없어서 처리량이 hot row 상한으로 돌아간다 (RATE 2000, 수량 100000, 2워커 / `cpus: 2`: 07 C의 약 1450에서 약 770 req/s로 떨어짐, app·postgres CPU 여유) | 대기 |
