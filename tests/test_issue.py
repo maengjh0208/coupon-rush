@@ -110,3 +110,11 @@ async def test_returns_not_started_before_starts_at(client, create_coupon):
     response = await client.post(f"/coupons/{coupon_id}/issue", json={"user_id": 1})
     assert response.status_code == 409
     assert response.json() == {"code": "NOT_STARTED"}
+
+
+async def test_returns_sold_out_when_stock_exhausted_even_if_already_issued(client, create_coupon):
+    coupon_id = await create_coupon(total_quantity=1)
+    await client.post(f"/coupons/{coupon_id}/issue", json={"user_id": 1})  # Redis 재고 1 → 0
+
+    response = await client.post(f"/coupons/{coupon_id}/issue", json={"user_id": 1})
+    assert response.json() == {"code": "SOLD_OUT"}

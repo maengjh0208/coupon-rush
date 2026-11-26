@@ -35,6 +35,7 @@
 | 8 | 재고를 Redis로 옮기면 Redis와 DB의 상태가 어긋날 수 있다 (DECR 후 app 장애·COMMIT 실패로 재고 유실, Redis 재시작·오래된 스냅샷 복구·failover로 재고 값이 사라지거나 과거로 돌아감) | 완료 ([08](specs_plans/08-redis-db-divergence.md), DB 조건부 UPDATE를 최종 방어선으로) |
 | 21 | Redis가 재시작되면 재시작 후 첫 요청이 500으로 실패한다. app 연결 풀에 남은 끊긴 연결을 그대로 써서 `redis.exceptions.ConnectionError: Connection closed by server`가 난다. DECR 전에 실패해서 재고는 어긋나지 않는다 (11-18 문제 8 kill 재현에서 2회 확인) | 완료 ([21](specs_plans/21-redis-restart-stale-connection.md), 고치지 않기로 결정: DECR 재시도는 이중 차감 위험) |
 | 22 | DB를 최종 방어선으로 두면(문제 8) 발급에 성공하는 모든 요청이 다시 쿠폰 row의 행 락을 지나간다. 수량이 요청 수보다 크면 Redis가 걸러내는 요청이 없어서 처리량이 hot row 상한으로 돌아간다 (RATE 2000, 수량 100000, 2워커 / `cpus: 2`: 07 C의 약 1450에서 약 770 req/s로 떨어짐, app·postgres CPU 여유) | 대기 |
+| 23 | Redis 재고 키가 사라지면(지속성 없이 재시작, eviction, 실수 삭제) 쿠폰이 영원히 SOLD_OUT이 된다. 키가 없는 상태에서 `DECR`하면 -1이 되고 보상 `INCR`로 0이 되어 굳는다. DB에서 재고를 다시 채우는 경로가 없다 (fail closed라 초과 발급은 없지만 판매가 멈춘다, [08](specs_plans/08-redis-db-divergence.md) 참고) | 대기 |
 | 19 | 없는 쿠폰 id로 요청하면 `DECR`이 Redis에 `coupon:{id}:stock` 키를 새로 만들고 남긴다. 임의의 id로 요청하면 쓰레기 키가 제한 없이 쌓인다 ([07](specs_plans/07-hot-row.md) 참고) | 완료 ([07](specs_plans/07-hot-row.md), DECR 전에 쿠폰 존재 확인) |
 
 ## 4단계: 동기 처리의 한계

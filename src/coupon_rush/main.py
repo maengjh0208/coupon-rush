@@ -112,6 +112,11 @@ async def issue_coupon(
     conn: Annotated[AsyncConnection, Depends(get_conn)],
     redis: Annotated[aioredis.Redis, Depends(get_redis)],
 ):
+    # 빠른 거절용 (매진 뒤 요청이 DB를 거치지 않게). 재고의 최종 판단은 DECR
+    stock = await redis.get(redis_stock_key(coupon_id))
+    if stock is not None and int(stock) <= 0:
+        raise CouponSoldOut()
+
     result = await conn.execute(select(coupon.c.starts_at <= func.now()).where(coupon.c.id == coupon_id))
     started = result.scalar_one_or_none()
     if started is None:
