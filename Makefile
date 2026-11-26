@@ -4,6 +4,7 @@ reset-db:
 	docker compose exec app python scripts/reset_db.py $(QTY)
 
 pytest:
+	docker compose up -d --wait
 	docker compose exec app pytest -v $(ARGS)
 
 # make bench RATES=2000

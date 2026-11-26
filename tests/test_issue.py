@@ -118,3 +118,22 @@ async def test_returns_sold_out_when_stock_exhausted_even_if_already_issued(clie
 
     response = await client.post(f"/coupons/{coupon_id}/issue", json={"user_id": 1})
     assert response.json() == {"code": "SOLD_OUT"}
+
+
+async def test_issues_when_redis_stock_key_is_missing(client, redis, coupon_id):
+    await redis.delete(redis_stock_key(coupon_id))  # 키 유실
+
+    response = await client.post(f"/coupons/{coupon_id}/issue", json={"user_id": 1})
+    assert response.status_code == 201
+
+
+async def test_refills_missing_stock_key_from_db(client, redis, create_coupon):
+    coupon_id = await create_coupon(total_quantity=10)
+    await client.post(f"/coupons/{coupon_id}/issue", json={"user_id": 1})  # DB issued 1
+
+    key = redis_stock_key(coupon_id)
+    await redis.delete(key)
+
+    await client.post(f"/coupons/{coupon_id}/issue", json={"user_id": 2})
+
+    assert int(await redis.get(key)) == 8  # 10 - 1(기존 발급)로 채운 뒤 DECR 해서 8이 나와야 함

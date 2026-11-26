@@ -81,9 +81,8 @@ async def get_redis(request: Request) -> aioredis.Redis:
 
 # Context Manager
 @asynccontextmanager
-async def reserve_stock(redis: aioredis.Redis, coupon_id: int) -> AsyncIterator[None]:
+async def reserve_stock(redis: aioredis.Redis, key: str) -> AsyncIterator[None]:
     # 재고 1개 예약. 예외가 발생하면 재고를 되돌림.
-    key = redis_stock_key(coupon_id)
     if await redis.decr(key) < 0:
         await redis.incr(key)
         raise CouponSoldOut()
@@ -113,16 +112,26 @@ async def issue_coupon(
     redis: Annotated[aioredis.Redis, Depends(get_redis)],
 ):
     # 빠른 거절용 (매진 뒤 요청이 DB를 거치지 않게). 재고의 최종 판단은 DECR
-    stock = await redis.get(redis_stock_key(coupon_id))
+    key = redis_stock_key(coupon_id)
+    stock = await redis.get(key)
     if stock is not None and int(stock) <= 0:
         raise CouponSoldOut()
 
-    result = await conn.execute(select(coupon.c.starts_at <= func.now()).where(coupon.c.id == coupon_id))
-    started = result.scalar_one_or_none()
-    if started is None:
+    result = await conn.execute(
+        select(
+            coupon.c.total_quantity,
+            coupon.c.issued_quantity,
+            (coupon.c.starts_at <= func.now()).label("started"),
+        ).where(coupon.c.id == coupon_id)
+    )
+    coupon_row = result.one_or_none()
+    if coupon_row is None:
         raise CouponNotFound()
-    if not started:
+    if not coupon_row.started:
         raise CouponNotStarted()
+
+    if stock is None:
+        await redis.set(key, coupon_row.total_quantity - coupon_row.issued_quantity, nx=True)
 
     # 빠른 거절용 (락 전에 대부분의 중복을 걸러냄). 동시 중복의 최종 방어는 UNIQUE 제약
     already_issued = (
@@ -135,7 +144,7 @@ async def issue_coupon(
         raise DuplicateCouponIssue()
 
     # 쿠폰 재고 차감 및 쿠폰 발급
-    async with reserve_stock(redis, coupon_id):
+    async with reserve_stock(redis, key):
         # UPDATE를 INSERT보다 먼저: INSERT가 먼저면 FK 검사의 KEY SHARE가 hot row에 몰려 MultiXact 경합
         result = await conn.execute(
             update(coupon)
